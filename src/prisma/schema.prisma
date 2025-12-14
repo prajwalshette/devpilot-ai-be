@@ -1,0 +1,304 @@
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+// ENUMS
+enum AuthProvider {
+    EMAIL
+    GITHUB
+}
+
+enum ProjectType {
+    ARCHITECTURE
+    REPO_ANALYSIS
+    RAG
+    COMBINED
+}
+
+enum AnalysisStatus {
+    PENDING
+    PROCESSING
+    COMPLETED
+    FAILED
+}
+
+enum UserRole {
+    USER
+    ADMIN
+}
+
+enum DocumentationType {
+    PRODUCT_OVERVIEW
+    TECHNICAL_ARCHITECTURE
+    API_REFERENCE
+    DEVELOPER_GUIDE
+    COMPREHENSIVE
+}
+
+// AUTHENTICATION & USER MANAGEMENT
+model User {
+    id            String    @id @default(ulid())
+    name          String?
+    email         String?   @unique
+    emailVerified DateTime?
+    image         String?
+    password      String? // Hashed password for email/password auth
+    role          UserRole  @default(USER)
+
+    // Relations
+    accounts      Account[]
+    sessions      Session[]
+    projects      Project[]
+    // Audit
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+
+    @@index([email])
+    @@map("users")
+}
+
+model Account {
+    id                String       @id @default(ulid())
+    userId            String
+    type              String // oauth, email, etc.
+    provider          AuthProvider
+    providerAccountId String // GitHub user ID
+
+    // OAuth tokens
+    refreshToken String?
+    accessToken  String?
+    expiresAt    Int?
+    tokenType    String?
+    scope        String?
+    idToken      String?
+    sessionState String?
+
+    // Provider metadata
+    metadata Json? // Store additional provider-specific data
+
+    // Relations
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([provider, providerAccountId])
+    @@index([userId])
+    @@map("accounts")
+}
+
+model Session {
+    id           String   @id @default(ulid())
+    sessionToken String   @unique
+    userId       String
+    expires      DateTime
+
+    // Security tracking
+    ipAddress String?
+    userAgent String?
+
+    // Relations
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([userId])
+    @@index([expires])
+    @@map("sessions")
+}
+
+model VerificationToken {
+    identifier String // Email or user ID
+    token      String   @unique
+    expires    DateTime
+    type       String // email_verification, password_reset, etc.
+
+    @@unique([identifier, token])
+    @@index([expires])
+    @@map("verification_tokens")
+}
+
+
+// PRODUCT FEATURES
+model Project {
+    id          String      @id @default(ulid())
+    userId      String
+    name        String
+    description String?
+    type        ProjectType @default(COMBINED)
+
+    prompt String?
+
+    // Relations to feature results
+    architecture  Architecture?
+    repoAnalysis  RepoAnalysis?
+    ragIndex      RAGIndex?
+    documentation Documentation?
+
+    // Metadata
+    tags     String[] @default([])
+    metadata Json? // Flexible metadata storage
+
+    // Relations
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    // Audit
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime? // Soft delete
+
+    @@index([userId])
+    @@index([createdAt])
+    @@index([type])
+    @@map("projects")
+}
+
+model Architecture {
+    id        String @id @default(ulid())
+    projectId String @unique
+
+    // Architecture content
+    systemArchitecture String
+    apiRoutes          Json // Array of API route definitions
+    databaseSchema     Json // Database schema with tables, columns, relationships
+    mermaidDiagrams    Json // Array of mermaid diagrams
+    fileStructure      Json // Project file structure
+    backendCode        Json // Array of code templates
+
+    // Additional metadata
+    techStack           String[] @default([])
+    estimatedComplexity String? // Low, Medium, High
+
+    // Relations
+    project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([projectId])
+    @@map("architectures")
+}
+
+model RepoAnalysis {
+    id        String @id @default(ulid())
+    projectId String @unique
+
+    // Repository info
+    repoUrl    String
+    repoName   String
+    repoBranch String @default("main")
+
+    // Analysis results
+    status          AnalysisStatus @default(PENDING)
+    summary         String?
+    bugs            Json? // Array of bug findings
+    codeSmells      Json? // Array of code smell findings
+    securityIssues  Json? // Array of security issues
+    suggestions     Json? // Array of improvement suggestions
+    generatedReadme String?
+
+    // Metrics
+    filesAnalyzed Int @default(0)
+    linesOfCode   Int @default(0)
+
+    // Error handling
+    errorMessage String?
+
+    // Relations
+    project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    // Audit
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+    completedAt DateTime?
+
+    @@index([projectId])
+    @@index([status])
+    @@map("repo_analyses")
+}
+
+model RAGIndex {
+    id        String @id @default(ulid())
+    projectId String @unique
+
+    // Qdrant collection info
+    collectionName String @unique // Qdrant collection name
+
+    // Indexing metadata
+    repoUrl  String?
+    repoName String?
+    status   AnalysisStatus @default(PENDING)
+
+    // Statistics
+    totalDocuments Int @default(0)
+    totalChunks    Int @default(0)
+
+    // Configuration
+    chunkSize      Int    @default(1000)
+    chunkOverlap   Int    @default(200)
+    embeddingModel String @default("text-embedding-004")
+
+    // Query history (store recent queries for analytics)
+    queryHistory Json? // Array of recent queries with timestamps
+
+    // Error handling
+    errorMessage String?
+
+    // Relations
+    project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    // Audit
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+    completedAt DateTime?
+
+    @@index([projectId])
+    @@index([collectionName])
+    @@index([status])
+    @@map("rag_indexes")
+}
+
+// DOCUMENTATION GENERATION
+model Documentation {
+    id        String            @id @default(ulid())
+    projectId String            @unique
+    type      DocumentationType @default(COMPREHENSIVE)
+
+    // Generated Content Sections
+    productOverview       String? // What the product is, problems it solves
+    coreFeatures          Json? // Array of feature descriptions with details
+    technicalArchitecture String? // System architecture explanation
+    architectureDiagrams  Json? // Array of Mermaid diagrams (system, sequence, ERD)
+    dataModels            String? // Database schema documentation
+    apiReference          String? // API endpoint documentation
+    workflows             Json? // Workflow descriptions with sequence diagrams
+    useCases              Json? // Use case scenarios
+    techStack             Json? // Technology breakdown and explanations
+    securityFeatures      String? // Security documentation
+
+    // Metadata
+    generatedFrom String[] @default([]) // Sources: "prisma_schema", "api_routes", "codebase", "architecture"
+    wordCount     Int      @default(0) // Total word count
+    diagramCount  Int      @default(0) // Number of diagrams generated
+
+    // Relations
+    project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([projectId])
+    @@index([type])
+    @@map("documentations")
+}
