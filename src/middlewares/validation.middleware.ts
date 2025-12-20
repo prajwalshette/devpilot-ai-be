@@ -8,7 +8,7 @@ import { HttpException } from '@exceptions/HttpException';
  * @param schema Zod schema object
  * @param source Source of data to validate: 'body' | 'query' | 'params'
  */
-export const ValidationMiddleware = (schema: ZodType, source: 'body' | 'query' | 'params' = 'body') => {
+export const ZodValidationMiddleware = (schema: ZodType, source: 'body' | 'query' | 'params' = 'body') => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const validated = await schema.parseAsync(req[source]);
@@ -30,7 +30,7 @@ export const ValidationMiddleware = (schema: ZodType, source: 'body' | 'query' |
  * @description Validates multiple parts of the request (body, query, params)
  * @param schemas Object containing schemas for different parts of the request
  */
-export const ValidateRequest = (schemas: { body?: ZodType; query?: ZodType; params?: ZodType }) => {
+export const ZodValidateRequest = (schemas: { body?: ZodType; query?: ZodType; params?: ZodType }) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (schemas.body) {

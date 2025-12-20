@@ -1,5 +1,8 @@
+import { AuthProvider } from "@prisma/client";
 export interface User {
-    id?: number;
+    id?: string;
     email: string;
     password: string;
+    name?: string;
+    authProvider?: AuthProvider;
   }

@@ -30,7 +30,9 @@
       "@middlewares/*": ["middlewares/*"],
       "@routes/*": ["routes/*"],
       "@services/*": ["services/*"],
-      "@utils/*": ["utils/*"]
+      "@utils/*": ["utils/*"],
+      "@schemas/*": ["schemas/*"],
+      "@database/*": ["database/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.json", ".env"],
